@@ -53,7 +53,7 @@ module Parser =
 
     let ( .>>. ) = andThen
 
-    let map f parser = 
+    let mapP f parser = 
         let innerFn input =
             let result = run parser input
             match result with
@@ -61,19 +61,8 @@ module Parser =
             | Error e -> Error e
         Parser innerFn
 
-    let ( <!> ) = map
-
-    let rec many parser =
-        let innerFn input =
-            let result = run parser input
-            match result with
-            | Ok (v, remaining1) -> 
-                let recResult = run (many parser) remaining1
-                match recResult with
-                | Ok (v2, remaining2) -> Ok (v::v2, remaining2)
-                | Error _ -> Ok ([v], remaining1)
-            | Error _ -> Ok ([], input)
-        Parser innerFn
+    let ( <!> ) = mapP
+    let (|>>) x f = mapP f x 
 
     let choice parserList = 
         List.reduce orElse parserList
@@ -87,8 +76,106 @@ module Parser =
         let innerFn input = Ok(x, input)
         Parser innerFn
 
-    let apply fP xP =
+    let applyP fP xP =
         (fP .>>. xP)
-        |> map (fun (f,x) -> f x)
+        |> mapP (fun (f,x) -> f x)
 
-    let (<*>) = apply
+    let (<*>) = applyP
+
+    let lift2 f xP yP =
+        returnP f <*> xP <*> yP
+
+    let rec sequence parserList =
+        let cons head tail = head::tail
+        let consP = lift2 cons
+
+        match parserList with
+        | [] -> returnP []
+        | head::tail -> consP head (sequence tail)
+    
+    let charListToStr charList =
+        String(List.toArray charList)
+
+    let pstring str =
+        str
+        |> List.ofSeq
+        |> List.map pchar
+        |> sequence
+        |> mapP charListToStr
+
+
+    let rec private parseZeroOrMore parser input =
+        let firstResult = run parser input
+        match firstResult with
+        | Ok (firstValue, inputAfterParse) ->
+            let (subsequentValues, remainingInput) = parseZeroOrMore parser inputAfterParse
+            let values = firstValue::subsequentValues
+            (values, remainingInput)
+        | Error _ -> ([], input)
+
+    let rec many parser =
+        let innerFn input =
+            Ok (parseZeroOrMore parser input)
+        Parser innerFn
+
+    let rec many1 parser =
+        let innerFn input =
+            let result = run parser input
+            match result with
+            | Ok (firstValue, inputAfterFirstParse) ->
+                let (subsequentValues, remainingInput) = parseZeroOrMore parser inputAfterFirstParse
+                let values = firstValue::subsequentValues
+                Ok (values, remainingInput)
+            | Error e -> Error e
+        Parser innerFn
+
+    let opt p =
+        let some = p |>> Some
+        let none = returnP None
+        some <|> none
+
+    let pint =
+        let resultToInt (sign, charList) =
+            let i = String(List.toArray charList) |> int
+            match sign with
+            | Some _ -> -i
+            | None -> i
+
+        let digit = anyOf ['0'..'9']
+
+        let digits = many1 digit
+
+        opt (pchar '-') .>>. digits 
+        |> mapP resultToInt
+
+    let (.>>) p1 p2 =
+        p1 .>>. p2
+        |> mapP (fun (x,_) -> x)
+
+    let (>>.) p1 p2 =
+        p1 .>>. p2
+        |> mapP (fun (_,x) -> x)
+
+    let between p1 p2 p3 =
+        p1 >>. p2 .>> p3
+
+    // Parses one or more occurences of p separated by sep
+    let sepBy1 p sep =
+        let sepThenP = sep >>. p
+        p .>>. many sepThenP
+        |>> fun (p, pList) -> p::pList
+
+    let sepBy p sep =
+        sepBy1 p sep <|> returnP []
+
+    let bindP f p =
+        let innerFn input =
+            let result1 = run p input
+            match result1 with
+            | Ok (v, remaining) -> 
+                let p2 = f v
+                run p2 remaining
+            | Error e -> Error e
+        Parser innerFn
+
+    let ( >>= ) p f = bindP f p
