@@ -1,5 +1,9 @@
 module Parser
 
+// TODO: backtracking
+// In an or expression we don't want to backtrack if we were successful but failed later.
+// See https://fsharpforfunandprofit.com/posts/understanding-parser-combinators-3/ for more details.
+
 module TextInput =
     open System
 
