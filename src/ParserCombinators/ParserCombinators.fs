@@ -1,6 +1,10 @@
 module ParserCombinators
 
-open Parser.Parser
+open Parser
+
+// TODO: backtracking
+// In an or expression we don't want to backtrack if we were successful but failed later.
+// See https://fsharpforfunandprofit.com/posts/understanding-parser-combinators-3/ for more details.
 
 [<EntryPoint>]
 let main argv =
