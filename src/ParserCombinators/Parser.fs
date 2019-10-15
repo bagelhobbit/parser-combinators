@@ -232,7 +232,7 @@ module Combinators =
         let label = sprintf "opt %s" parser.label
         let some = parser |>> Some
         let none = returnP None
-        some <|> none
+        (some <|> none) <?> label
     let ( .>> ) p1 p2 =
         p1 .>>. p2
         |> mapP (fun (x,_) -> x)
