@@ -155,7 +155,7 @@ module Combinators =
     let ( >>= ) p f = bindP f p
 
     let returnP x =
-        let label = "unknown"
+        let label = sprintf "%A" x
         let innerFn input = Ok(x, input)
         {parseFn=innerFn; label=label}
 
