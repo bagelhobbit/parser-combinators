@@ -2,7 +2,7 @@ module Parser
 
 // TODO: backtracking
 // In an or expression we don't want to backtrack if we were successful but failed later.
-// See https://fsharpforfunandprofit.com/posts/understanding-parser-combinators-3/ for more details.
+// See https://fsharpforfunandprofit.com/posts/understanding-parser-combinators-3/#5-backtracking for more details.
 
 module TextInput =
     open System
@@ -117,7 +117,7 @@ let setLabel parser newLabel =
         match result with
         | Ok (v, remaining) -> Ok (v, remaining)
         | Error (_, err, pos) -> Error (newLabel, err, pos)
-    { parseFn=newInnerFn; label=newLabel}
+    {parseFn=newInnerFn; label=newLabel}
 
 let ( <?> ) = setLabel
 
