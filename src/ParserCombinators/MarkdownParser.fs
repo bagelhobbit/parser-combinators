@@ -35,15 +35,6 @@ module Spec =
 
 [<EntryPoint>]
 let main args =
-    let trueP = pstring "true"
-    let falseP = pstring "false"
-    let boolP = trueP <|> falseP
-
-    // let result1 = run trueP "truX"
-    // printResult result1
-
-    // let result2 = run boolP "truX"
-    // printResult result2
 
     let input = 
         """ # This is a heading
@@ -63,6 +54,7 @@ let main args =
 #                  foo                                 
 ### Header endings ##     
 ### Header endings 2 #########  
+### Header endings 3 #
 ### Invalid Header ending ##### b
 # foo#
 ### foo \###
@@ -75,10 +67,22 @@ let main args =
         strings
         |> List.reduce (+)
 
+    let text = satisfy (fun c -> c <> '\n') "text" 
+
+    let removeEscapedCharacters s =
+        let parser = many ( opt (pchar '\\') >>. text ) .>> pchar '\n' |>> charListToStr
+
+        match run parser s with
+        | Ok (result,_) -> result
+        | Error _ -> s
+
+    let canonicalize =
+        let trim (s:string) = s.Trim()
+        trim >> removeEscapedCharacters
+
     let textP = 
-        let text = satisfy (fun c -> c <> '\n') "text" 
         // Only parse a single line
-        many text .>> pchar '\n' |>> charListToStr |>> Text <?> "text"
+        many text .>> pchar '\n' |>> charListToStr |>> (canonicalize >> Text) <?> "text"
 
     let atxHeadingP =
         let hash = pchar '#'
@@ -87,7 +91,7 @@ let main args =
         let contentOrNewline =
             let heading = 
                 let basicText = satisfy (fun ch -> ch <> '\n' && ch <> '#') "text" |>> charToStr
-                let escapedHash = pstring "\\#" //.>>. many (pstring "#")
+                let escapedHash = pstring "\\#" .>>. many (pstring "#") |>> (fun (s1,s2) -> s1 + (stringListToString s2))
                 escapedHash <|> basicText
             let headingContent = many1 space >>. many heading |>> stringListToString
             headingContent <|> (pstring "\n" >>. returnP "")
@@ -100,14 +104,12 @@ let main args =
             let trailingSpaces = many space
             (endingHashes <|> trailingSpaces) .>> pchar '\n'
 
-        let trim (s:string) = s.Trim()
-
-        let h1 = upTo3Spaces >>. hash >>. contentOrNewline .>> closingHashes |>> (trim >> H1) <?> "h1"
-        let h2 = upTo3Spaces >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (trim >> H2) <?> "h2"
-        let h3 = upTo3Spaces >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (trim >> H3) <?> "h3"
-        let h4 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (trim >> H4) <?> "h4"
-        let h5 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (trim >> H5) <?> "h5"
-        let h6 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (trim >> H6) <?> "h6"
+        let h1 = upTo3Spaces >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H1) <?> "h1"
+        let h2 = upTo3Spaces >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H2) <?> "h2"
+        let h3 = upTo3Spaces >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H3) <?> "h3"
+        let h4 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H4) <?> "h4"
+        let h5 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H5) <?> "h5"
+        let h6 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H6) <?> "h6"
 
         let test = run h3 "### Header endings ##     "
         printResult test
