@@ -273,7 +273,8 @@ module StdParsers =
         <?> label
 
     let charListToStr charList =
-        String(List.toArray charList)
+        charList
+        |> List.fold ( fun state c -> state + (sprintf "%c" c) ) ""
 
     let manyChars cp =
         many cp

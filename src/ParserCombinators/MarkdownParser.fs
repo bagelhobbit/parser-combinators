@@ -54,18 +54,18 @@ let main args =
 #                  foo                                 
 ### Header endings ##     
 ### Header endings 2 #########  
-### Header endings 3 #
+### Header endings 3 #     
 ### Invalid Header ending ##### b
 # foo#
 ### foo \###
-
 """
 
     let charToStr c = sprintf "%c" c
 
-    let stringListToString (strings:string list) = 
-        strings
-        |> List.reduce (+)
+    let stringListToString = function
+        | [] -> ""
+        | [s] -> s
+        | xs -> xs |> List.reduce (+)
 
     let text = satisfy (fun c -> c <> '\n') "text" 
 
@@ -88,33 +88,24 @@ let main args =
         let hash = pchar '#'
         let space = pchar ' '
 
-        let contentOrNewline =
-            let heading = 
-                let basicText = satisfy (fun ch -> ch <> '\n' && ch <> '#') "text" |>> charToStr
-                let escapedHash = pstring "\\#" .>>. many (pstring "#") |>> (fun (s1,s2) -> s1 + (stringListToString s2))
-                escapedHash <|> basicText
-            let headingContent = many1 space >>. many heading |>> stringListToString
-            headingContent <|> (pstring "\n" >>. returnP "")
-
         let upTo3Spaces = opt space .>>. opt space .>>. opt space
 
-        // ATX headers can be optionally closed by any number of hashes
-        let closingHashes = 
-            let endingHashes = many space .>> many hash .>> many space 
-            let trailingSpaces = many space
-            (endingHashes <|> trailingSpaces) .>> pchar '\n'
+        let notNewline = satisfy (fun ch -> ch <> '\n' && ch <> '#' && ch <> ' ' && ch <> '\\') "text" |>> sprintf "%c" <|> ( pchar '\\' >>. many1 hash |>> charListToStr ) <|> pstring "\\"
 
-        let h1 = upTo3Spaces >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H1) <?> "h1"
-        let h2 = upTo3Spaces >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H2) <?> "h2"
-        let h3 = upTo3Spaces >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H3) <?> "h3"
-        let h4 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H4) <?> "h4"
-        let h5 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H5) <?> "h5"
-        let h6 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrNewline .>> closingHashes |>> (canonicalize >> H6) <?> "h6"
+        let spacesThenContent = many1 space .>>. many notNewline |>> (fun (a, b) -> (charListToStr a) :: b)
+        let spacesThenHash = many space .>>. many hash .>> many space |>> (fun (a, b) -> a @ b)
 
-        let test = run h3 "### Header endings ##     "
-        printResult test
+        let contentOrEmpty =  ( many spacesThenContent .>> spacesThenHash ) <|> (many space >>. returnP [[""]]) |>> List.concat
+
+        let h1 = upTo3Spaces >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H1) <?> "h1"
+        let h2 = upTo3Spaces >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H2) <?> "h2"
+        let h3 = upTo3Spaces >>. hash >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H3) <?> "h3"
+        let h4 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H4) <?> "h4"
+        let h5 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash>>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H5) <?> "h5"
+        let h6 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H6) <?> "h6"
 
         h1 <|> h2 <|> h3 <|> h4 <|> h5 <|> h6 |>> Header <|> textP
+
 
     let headingResult = run (many1 atxHeadingP <?> "heading text") input
     printResult headingResult
