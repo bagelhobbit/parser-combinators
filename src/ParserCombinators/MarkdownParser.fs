@@ -90,6 +90,12 @@ let main args =
 
         let upTo3Spaces = opt space .>>. opt space .>>. opt space
 
+        let opt6PairToList (((((a, b), c), d), e), f) =
+            (Some a)::b::c::d::e::[f]
+            |> List.collect Option.toList
+
+        let oneToSixHashes = hash .>>. opt hash .>>. opt hash .>>. opt hash .>>. opt hash .>>. opt hash |>> opt6PairToList
+
         let notNewline = satisfy (fun ch -> ch <> '\n' && ch <> '#' && ch <> ' ' && ch <> '\\') "text" |>> sprintf "%c" <|> ( pchar '\\' >>. many1 hash |>> charListToStr ) <|> pstring "\\"
 
         let spacesThenContent = many1 space .>>. many notNewline |>> (fun (a, b) -> (charListToStr a) :: b)
@@ -97,14 +103,21 @@ let main args =
 
         let contentOrEmpty =  ( many spacesThenContent .>> spacesThenHash ) <|> (many space >>. returnP [[""]]) |>> List.concat
 
-        let h1 = upTo3Spaces >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H1) <?> "h1"
-        let h2 = upTo3Spaces >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H2) <?> "h2"
-        let h3 = upTo3Spaces >>. hash >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H3) <?> "h3"
-        let h4 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H4) <?> "h4"
-        let h5 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash>>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H5) <?> "h5"
-        let h6 = upTo3Spaces >>. hash >>. hash >>. hash >>. hash >>. hash >>. hash >>. contentOrEmpty .>> pchar '\n' |>> (stringListToString >> canonicalize >> H6) <?> "h6"
+        let getCanonicalHeader (hashes, strings) =
+            let header = 
+                match hashes with
+                | 1 -> H1
+                | 2 -> H2
+                | 3 -> H3
+                | 4 -> H4
+                | 5 -> H5
+                | _ -> H6
+            
+            strings |> stringListToString |> canonicalize |> header
 
-        h1 <|> h2 <|> h3 <|> h4 <|> h5 <|> h6 |>> Header <|> textP
+        let header = upTo3Spaces >>. ( oneToSixHashes |>> (fun chars -> chars.Length) ) .>>. contentOrEmpty .>> pchar '\n' |>> getCanonicalHeader <?> "atx heading"
+
+        header |>> Header <|> textP
 
 
     let headingResult = run (many1 atxHeadingP <?> "heading text") input
